@@ -1038,88 +1038,87 @@ def cross_fidelity( Pi1, Pi2, Pi12 ):
 
 
 
-####################### Plots ############################
+###################### Plots ############################
 
-def sph2cart(r, theta, phi):
-    '''spherical to Cartesian transformation.'''
-    x = r * np.sin(theta) * np.cos(phi)
-    y = r * np.sin(theta) * np.sin(phi)
-    z = r * np.cos(theta)
-    return x, y, z
+# def sph2cart(r, theta, phi):
+#     '''spherical to Cartesian transformation.'''
+#     x = r * np.sin(theta) * np.cos(phi)
+#     y = r * np.sin(theta) * np.sin(phi)
+#     z = r * np.cos(theta)
+#     return x, y, z
 
-def sphview(ax):
-    '''returns the camera position for 3D axes in spherical coordinates'''
-    r = np.square(np.max([ax.get_xlim(), ax.get_ylim()], 1)).sum()
-    theta, phi = np.radians((90-ax.elev, ax.azim))
-    return r, theta, phi
+# def sphview(ax):
+#     '''returns the camera position for 3D axes in spherical coordinates'''
+#     r = np.square(np.max([ax.get_xlim(), ax.get_ylim()], 1)).sum()
+#     theta, phi = np.radians((90-ax.elev, ax.azim))
+#     return r, theta, phi
 
-def getDistances(view, xpos, ypos, dz):
-    distances  = []
-    for i in range(len(xpos)):
-        distance = (xpos[i] - view[0])**2 + (ypos[i] - view[1])**2 + (dz[i] - view[2])**2
-        distances.append(np.sqrt(distance))
-    return distances
+# def getDistances(view, xpos, ypos, dz):
+#     distances  = []
+#     for i in range(len(xpos)):
+#         distance = (xpos[i] - view[0])**2 + (ypos[i] - view[1])**2 + (dz[i] - view[2])**2
+#         distances.append(np.sqrt(distance))
+#     return distances
 
-def Bar3D( A , ax = None, xpos=None, ypos=None, zpos=None, dx=None, dy=None, M = 0, **args ):
+# def Bar3D( A , ax = None, xpos=None, ypos=None, zpos=None, dx=None, dy=None, M = 0, **args ):
     
-    d = A.shape[0]
-    camera = np.array([13.856, -24. ,0])
+#     d = A.shape[0]
+#     camera = np.array([13.856, -24. ,0])
     
-    if xpos is None :
-        xpos = np.arange(d) 
-    if ypos is None :
-        ypos = np.arange(d)
-    xpos, ypos = np.meshgrid( xpos, ypos )
-    xpos = xpos.flatten()
-    ypos = ypos.flatten()
+#     if xpos is None :
+#         xpos = np.arange(d) 
+#     if ypos is None :
+#         ypos = np.arange(d)
+#     xpos, ypos = np.meshgrid( xpos, ypos )
+#     xpos = xpos.flatten()
+#     ypos = ypos.flatten()
     
-    if zpos is None :
-        zpos = np.zeros_like(xpos)
-    else :
-        zpos = zpos.flatten()
+#     if zpos is None :
+#         zpos = np.zeros_like(xpos)
+#     else :
+#         zpos = zpos.flatten()
     
-    if dx is None :
-        dx = 0.5 * np.ones_like(xpos)
-    else :
-        dx = dx * np.ones_like(ypos)
+#     if dx is None :
+#         dx = 0.5 * np.ones_like(xpos)
+#     else :
+#         dx = dx * np.ones_like(ypos)
         
-    if dy is None :
-        dy = 0.5 * np.ones_like(ypos)
-    else :
-        dy = dy * np.ones_like(ypos)
+#     if dy is None :
+#         dy = 0.5 * np.ones_like(ypos)
+#     else :
+#         dy = dy * np.ones_like(ypos)
     
-    dz = A.flatten()
-    z_order = getDistances(camera, xpos, ypos, zpos)
+#     dz = A.flatten()
+#     z_order = getDistances(camera, xpos, ypos, zpos)
     
-    if ax == None :
-        fig = plt.figure()   
-        ax  = fig.add_subplot( 1,1,1, projection='3d')  
-    maxx    = np.max(z_order) + M
+#     if ax == None :
+#         fig = plt.figure()   
+#         ax  = fig.add_subplot( 1,1,1, projection='3d')  
+#     maxx    = np.max(z_order) + M
     
 #     plt.rc('font', size=15) 
-    for i in range(xpos.shape[0]):
-        pl = ax.bar3d(xpos[i], ypos[i], zpos[i], 
-                      dx[i], dy[i], dz[i], 
-                      zsort='max', **args )
-        pl._sort_zpos = maxx - z_order[i]
-#        ax.set_xticks( [0.25,1.25,2.25,3.25] )
-#        ax.set_xticklabels((r'$|gg\rangle$',r'$|ge\rangle$',
-#                                r'$|eg\rangle$',r'$|ee\rangle$'))
-#        ax.set_yticks( [0.25,1.25,2.25,3.25] )
-#        ax.set_yticklabels((r'$\langle gg|$',r'$\langle ge|$',
-#                                r'$\langle eg|$',r'$\langle ee|$'))
+#     for i in range(xpos.shape[0]):
+#         pl = ax.bar3d(xpos[i], ypos[i], zpos[i], 
+#                       dx[i], dy[i], dz[i], 
+#                       zsort='max', **args )
+#         pl._sort_zpos = maxx - z_order[i]
+#         ax.set_xticks( [0.25,1.25,2.25,3.25] )
+#         ax.set_xticklabels((r'$|gg\rangle$',r'$|ge\rangle$',
+#                                 r'$|eg\rangle$',r'$|ee\rangle$'))
+#         ax.set_yticks( [0.25,1.25,2.25,3.25] )
+#         ax.set_yticklabels((r'$\langle gg|$',r'$\langle ge|$',
+#                                 r'$\langle eg|$',r'$\langle ee|$'))
 #         ax.set_title( label, loc='left', fontsize=20, x = 0.1, y=.85)
-    ax.set_zlim([0,1])
-    return ax            
+#         ax.set_zlim([0,1])
+#     return ax            
 
 
-def Abs_Bars3D(Y):
-    fig = plt.figure(figsize=(len(Y)*4,5)) 
-    for y in range(len(Y)):
-        ax  = fig.add_subplot( 1, len(Y), y+1,  projection='3d')
-        Bar3D( np.abs( Y[y] ).T, ax=ax )   
-    return fig
-
+# def Abs_Bars3D(Y):
+#     fig = plt.figure(figsize=(len(Y)*4,5)) 
+#     for y in range(len(Y)):
+#         ax  = fig.add_subplot( 1, len(Y), y+1,  projection='3d')
+#         Bar3D( np.abs( Y[y] ).T, ax=ax )   
+#     return fig
 
 
             
