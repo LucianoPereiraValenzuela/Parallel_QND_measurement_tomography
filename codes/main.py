@@ -986,16 +986,16 @@ def Cross_Fidelity_POVM( Pi_single_1, Pi_single_2, Pi_double  ):
     return f
 
 def Cross_Error_Choi( Choi_single_1, Choi_single_2, Choi_double  ):
-    Y0 = [ qt.Process2Choi( A )/2 for A in Kron_Choi( Choi_single_1, Choi_single_2 )]
-    Y1 = [ qt.Process2Choi( A )/2 for A in Choi_double]
-    f = np.linalg.norm( np.array(Y0) - np.array(Y1) ) / np.sqrt( np.array(Y0).size )
+    Y0 = [ qt.Process2Choi( A ) for A in Kron_Choi( Choi_single_1, Choi_single_2 )]
+    Y1 = [ qt.Process2Choi( A ) for A in Choi_double]
+    f = np.linalg.norm( np.array(Y0) - np.array(Y1) ) # / np.sqrt( 2*np.array(Y0).size )
     return f
 
 def Cross_Error_POVM( Pi_single_1, Pi_single_2, Pi_double  ):
-    Pi0 = [ np.kron(A,B)/2 for A in Pi_single_1.reshape(2,2,2).transpose(1,2,0) 
+    Pi0 = [ np.kron(A,B) for A in Pi_single_1.reshape(2,2,2).transpose(1,2,0) 
            for B in Pi_single_2.reshape(2,2,2).transpose(1,2,0) ]
-    Pi1 = Pi_double.reshape(4,4,4).transpose(1,2,0)/2
-    f = np.linalg.norm( np.array(Pi0) - np.array(Pi1) ) / np.sqrt( np.array(Pi0).size )
+    Pi1 = Pi_double.reshape(4,4,4).transpose(1,2,0)
+    f = np.linalg.norm( np.array(Pi0) - np.array(Pi1) ) # / np.sqrt( 2*np.array(Pi0).size )
     return f
 
 def Cross_Quantities( Pi1, Choi1, Pi2, Choi2, Pi12, Choi12 ):
@@ -1023,7 +1023,7 @@ def cross_qndness( choi1, choi2, choi12 ):
             l = n*N + m
             f += abs( choi12[l][(1+d**2)*l,(1+d**2)*l] 
                      - choi1[n][(1+d)*n,(1+d)*n]*choi2[m][(1+d)*m,(1+d)*m]  )**2      
-    return np.sqrt( f / N**2 )       
+    return np.sqrt( f )    # / np.sqrt(N**2   )
 
 def cross_fidelity( Pi1, Pi2, Pi12 ):
     d, N = Pi1.shape
@@ -1034,7 +1034,7 @@ def cross_fidelity( Pi1, Pi2, Pi12 ):
             l = n*N + m
             f += abs( Pi12[:,l].reshape(d**2,d**2)[l,l]
                 - Pi1[:,n].reshape(d,d)[n,n]*Pi2[:,m].reshape(d,d)[m,m] )**2
-    return np.sqrt( f / N**2 ) 
+    return np.sqrt( f ) # / np.sqrt(N**2) 
 
 
 
