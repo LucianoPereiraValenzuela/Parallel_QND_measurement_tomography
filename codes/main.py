@@ -988,14 +988,14 @@ def Cross_Fidelity_POVM( Pi_single_1, Pi_single_2, Pi_double  ):
 def Cross_Error_Choi( Choi_single_1, Choi_single_2, Choi_double  ):
     Y0 = [ qt.Process2Choi( A ) for A in Kron_Choi( Choi_single_1, Choi_single_2 )]
     Y1 = [ qt.Process2Choi( A ) for A in Choi_double]
-    f = np.linalg.norm( np.array(Y0) - np.array(Y1) ) # / np.sqrt( 2*np.array(Y0).size )
+    f = np.linalg.norm( np.array(Y0) - np.array(Y1) ) # / np.sqrt( np.array(Y0).size )
     return f
 
 def Cross_Error_POVM( Pi_single_1, Pi_single_2, Pi_double  ):
     Pi0 = [ np.kron(A,B) for A in Pi_single_1.reshape(2,2,2).transpose(1,2,0) 
            for B in Pi_single_2.reshape(2,2,2).transpose(1,2,0) ]
     Pi1 = Pi_double.reshape(4,4,4).transpose(1,2,0)
-    f = np.linalg.norm( np.array(Pi0) - np.array(Pi1) ) # / np.sqrt( 2*np.array(Pi0).size )
+    f = np.linalg.norm( np.array(Pi0) - np.array(Pi1) ) # / np.sqrt( np.array(Pi0).size )
     return f
 
 def Cross_Quantities( Pi1, Choi1, Pi2, Choi2, Pi12, Choi12 ):
