@@ -3,13 +3,9 @@
 
 # In[1]:
 
-
 import numpy as np
-import matplotlib.pyplot as plt
 import scipy.linalg as la
 from scipy.optimize import minimize, least_squares
-np.set_printoptions(linewidth=150)
-
 
 # In[2]:
 
@@ -126,11 +122,11 @@ def LinearCombinationMatrices( c, B, Vectorized = False ):
     return Lambda
     
     
-def QuantitiesRho( ρ, Π, p_ex , Vectorized = False ):    
+def QuantitiesRho( rho, Pi, p_ex , Vectorized = False ):    
     """
     Calculate  the log-likelihood multinomial function 
     """
-    p_th = InnerProductMatrices( ρ, Π, Vectorized=Vectorized )
+    p_th = InnerProductMatrices( rho, Pi, Vectorized=Vectorized )
     f    = np.sum( - p_ex * np.log( p_th + 1e-12 ) ) 
     return f
 def VectorizeVectors( Vectors ):
