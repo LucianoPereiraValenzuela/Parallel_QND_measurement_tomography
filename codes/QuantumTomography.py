@@ -407,16 +407,11 @@ def LinearDetectorTomography(ProveStates, counts, vectorized = False ):
     return Measurements
 
 def ProbabilityOperatorsProjection(Pi):
-#     dim = int(np.sqrt(Pi.shape[0]))
-#     t0  = np.array( [ PositiveMatrix2CholeskyVector( PositiveOperatorProjection( Pi[:,k].reshape(dim,dim), 2) )  for k in range(Pi.shape[1])] ).flatten()
-#     fun = lambda t : la.norm( np.array([ CholeskyVector2PositiveMatrix(t.reshape(-1,dim**2)[k,:]).flatten() - Pi[:,k] for k in range(Pi.shape[1]) ])  )
-#     con = lambda t : la.norm( np.sum(np.array([ CholeskyVector2PositiveMatrix(t.reshape(-1,dim**2)[k,:]).flatten() for k in range(Pi.shape[1]) ]),0) - np.eye(dim).flatten() )
-#     t   = minimize( fun, t0 , constraints = ({'type': 'eq', 'fun': con }) )
-#     Pi  = np.array([ CholeskyVector2PositiveMatrix(t.x.reshape(-1,dim**2)[k,:]).flatten() for k in range(Pi.shape[1]) ]).T
-#     return Pi
+
     dim = int(np.sqrt(Pi.shape[0]))
     Num = Pi.shape[1]
     Pi  = np.array( [ PositiveOperatorProjection( Pi[:,k].reshape(dim,dim), 2).flatten() for k in range(Num) ] ).T
+    
     return Pi
     
 
@@ -439,10 +434,6 @@ def MaximumLikelihoodDetectorTomography( ProveStates, counts, Guess = [] , Func 
     norm     = np.trace(np.sum(Estimate,1).reshape(Dim,Dim))
     Estimate = Dim * Estimate / norm
     return Estimate
-
-
-# In[5]:
-
 
 def LinearProcessTomography(States, Measurements, counts, vectorized = False ):
     if vectorized == False:
@@ -517,27 +508,6 @@ def CompleteDetectorOperatorProjection(Choiv_in):
     Choiv_out = np.array( [ Process2Choi( PositiveOperatorProjection(Process2Choi(Choiv_in[:,:,k]), 2 ) ) for k in range(Num) ] ).transpose([1,2,0])
     return Choiv_out
 
-# def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, counts, Guess = [] , Func = 0, vectorized=False ):
-#     if vectorized == False:
-#         States = VectorizeVectors(States)
-#         Measurements = VectorizeVectors(Measurements)  
-#     Dim = int(np.sqrt(States.shape[0]))
-#     Num = counts.shape[2]
-#     if isinstance(Guess, list) and not Guess:
-#         Guess = CompleteDetectorOperatorProjection( LinearCompleteDetectorTomography( States, Measurements, counts, True) )
-#     t_guess =np.array([ PositiveMatrix2CholeskyVector( Process2Choi(Guess[:,:,k]) ) for k in range(Num) ]).flatten()
-#     counts_th = lambda t : np.real( np.array([ 
-#                                      Measurements.conj().T@Kron2Outer( CholeskyVector2PositiveMatrix( t.reshape(-1,Dim**4)[k,:] ),[Dim,Dim] )@States 
-#                                     for k in range(Num) ]).transpose( [1,2,0] ) )
-#     fun = lambda t : LikelihoodFunction(counts_th(t),counts,Func)
-#     Cons = lambda t: la.norm(PartialTrace( np.sum(np.array([ CholeskyVector2PositiveMatrix( t.reshape(-1,Dim**4)[k,:] ) for k in range(Num)] ),0), 
-#                                                                 [Dim,Dim], 0) - np.eye(Dim, dtype=complex) )
-#     results = minimize( fun, t_guess, constraints = ({'type': 'eq', 'fun': Cons }) )  
-#     t = results.x
-#     Estimate = np.array([Kron2Outer( CholeskyVector2PositiveMatrix( t.reshape(-1,Dim**4)[k,:] ),[Dim,Dim] ) for k in range(Num)  ]).transpose([1,2,0])
-#     return  Estimate
-
-
 def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex , Func = 0, vectorized=False , Pi = None, out = 0 ):
     
     if vectorized == False:
@@ -566,8 +536,8 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
         fun       = lambda t : LikelihoodFunction( Probs_th(t), Probs_ex[:,:,k], Func )
         con       = lambda t:  la.norm( PartialTrace( CholeskyVector2PositiveMatrix( t ) ,[Dim,Dim], 0).T.flatten() - Pi[:,k].flatten() )**2 
         
-#         print( 'prob',Probs_th(t_guess), Probs_ex[:,:,k])
-#         print( 'fun_in', fun(t_guess), con(t_guess) )
+#         print( 'prob',Probs_th(t_guess), Probs_ex[:,:,k])  
+#         print( 'fun_in', fun(t_guess), con(t_guess) )      
         
         constraints = ({'type': 'eq', 'fun': con })
         results   = minimize( fun, t_guess, constraints = constraints, method = 'SLSQP' )  
@@ -722,34 +692,4 @@ def GaugeFix_Fun(t,rho,Pi,Gamma,rho_tarjet,Pi_tarjet,Gamma_tarjet,B_t,gauge='gat
         f = Complex2Real( invB.conj().T@Pi - Pi_tarjet ).flatten()
         
     return f
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
 

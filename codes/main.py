@@ -6,6 +6,7 @@ from qiskit.visualization import plot_gate_map
 from qiskit.result import Result
 import networkx as nx
 from joblib import Parallel, delayed
+from itertools import chain
 
 def get_noise( job ):
     readout_error = [ job.properties().readout_error(j) for j in range(7)  ]
@@ -182,13 +183,16 @@ class measurement_process_tomography:
     """
     clase para realizar la tomografía de procesos de un detector.
     """
-    def __init__( self, n=1, p=1, m=None ):
+    def __init__( self, n_qubits=1, n_parallel=1, n_anc_qubits=0, n_anc_clbits=0 ):
         """
         n : numero de qubits
         p : tomografias paralelas
+        m : numero de qubits ancilla
         """
-        self._n = n
-        self._p = p
+        self._n = n_qubits
+        self._p = n_parallel
+        self._m = n_anc_qubits
+        self._l = n_anc_clbits
         self._postselection = False
         
     def circuits(self, circ_detector = None, name = 'circuit_mpt' ):
@@ -199,6 +203,8 @@ class measurement_process_tomography:
         
         n = self._n
         p = self._p
+        m = self._m
+        l = self._l
         
         # circuitos necesarios para una tomografía de Pauli
         circ_0, circ_x, circ_h, circ_k = tomographic_gate_set(p)
@@ -261,41 +267,35 @@ class measurement_process_tomography:
                     qc.compose( circ_measure[j], qubits=range(n*p), inplace=True )
                     qc.measure( range(n*p), range(n*p,2*n*p) )
                     circs_mpt.append( qc )
+
         # para un detector custom
         elif isinstance( circ_detector, QuantumCircuit ):
-            qc = QuantumCircuit(QuantumRegister(1,'qrd0'))
-            qc.add_register(ClassicalRegister(1,'crd0'))
-            for j in range(1,p*n):
-                qc.add_register(QuantumRegister(1,'qrd{}'.format(j)))
-                qc.add_register(ClassicalRegister(1,'crd{}'.format(j)))
+
+            qc = QuantumCircuit( QuantumRegister(p*(n+m),'qrd0'), 
+                                ClassicalRegister(p*(n+l),'crd0') )
             for j in range(p):
                 qc.compose(circ_detector, 
-                           qubits=range( j*n, (j+1)*n ),
-                           clbits=range( j*n, (j+1)*n ),
+                           qubits= list(range(n*j,n*(j+1))) + list(range( n*p+m*j,n*p+m*(j+1) ) ),
+                           clbits= list(range(n*j,n*(j+1))) + list(range( n*p+l*j,n*p+l*(j+1) ) ),
                            inplace=True 
                           )
             circ_detector = qc
+            self._circ_detector = circ_detector
             del qc
             
-            qc0 = QuantumCircuit(QuantumRegister(1,'qr0'))  
-            qc0.add_register(ClassicalRegister(1,'cr0'))    
-            qc0.add_register(ClassicalRegister(1,'cr1'))    
-            for j in range(1,p*n):
-                qc0.add_register(QuantumRegister(1,'qr{}'.format(j)))
-                qc0.add_register(ClassicalRegister(1,'cr{}'.format(2*j)))
-                qc0.add_register(ClassicalRegister(1,'cr{}'.format(2*j+1)))
+            qc0 = QuantumCircuit( QuantumRegister(p*(n+m),'qr0'), 
+                                ClassicalRegister( 2*p*(n+l),'cr0') )
             
             for i in range(6**n):
                 for j in range(3**n):
-                    # qc = QuantumCircuit( p*n, 2*p*n )
                     qc = qc0.copy(name+'_{}_{}_{}_{}'.format(n,p,i,j))                    
                     qc.compose( circ_state[i], qubits=range(n*p), inplace=True )
                     qc.barrier()
-                    qc.compose( circ_detector, qubits=range(n*p), clbits=range(n*p), inplace=True )
+                    qc.compose( circ_detector, qubits=range(p*(n+m)), clbits=range((n+l)*p), inplace=True )
                     qc.barrier()
                     qc.compose( circ_measure[j], qubits=range(n*p), inplace=True )
                     qc.barrier()
-                    qc.compose( circ_detector, qubits=range(n*p), clbits=range(n*p,2*n*p), inplace=True )
+                    qc.compose( circ_detector, qubits=range(p*(n+m)), clbits=range((n+l)*p,2*(n+l)*p), inplace=True )
                     circs_mpt.append( qc )         
                 
         elif isinstance( circ_detector, list ):
@@ -581,7 +581,8 @@ class device_process_measurement_tomography :
             circ_double = measurement_process_tomography( 2, p ).circuits()
             circs = []
             for circ_loop in circ_double:
-                circ = QuantumCircuit( self._num_qubits, 4*p )
+                circ = QuantumCircuit( self._num_qubits, 4*p, 
+                                        name=circ_loop.name+'_'+str(qubits).replace(' ','') )
                 circ.compose(circ_loop, qubits=qubits, inplace=True)
                 circs.append( circ )
             circs_all.append( circs )
