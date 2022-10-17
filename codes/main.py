@@ -2,11 +2,23 @@ import numpy as np
 import QuantumTomography as qt
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.providers.aer.noise import NoiseModel, thermal_relaxation_error
-from qiskit.visualization import plot_gate_map
+from qiskit.providers.ibmq import IBMQBackend
 from qiskit.result import Result
 import networkx as nx
 from joblib import Parallel, delayed
-from itertools import chain
+import cvxpy as cvx
+
+# from itertools import chain
+
+class Results:
+    # class for results of tomography
+
+    def __init__(self) -> None:
+        pass
+
+    def gate_set(self):
+        return [ self.states, self.measurements, self.processes ]
+
 
 def get_noise( job ):
     readout_error = [ job.properties().readout_error(j) for j in range(7)  ]
@@ -125,9 +137,15 @@ class tomographic_gate_set_tomography:
             circ_gst = self._circ_gst
         
         self._counts = []
-        for qc in circ_gst:
-            counts  = resampling_counts( results.get_counts(qc), resampling=resampling )
-            self._counts.append( counts )
+        if isinstance( results, Result ):
+            for qc in circ_gst: ##############################################
+                counts  = resampling_counts( results.get_counts(qc), resampling=resampling )
+                self._counts.append( counts )    
+        elif isinstance( results, list ) :  
+            for qc in range( len(circ_gst) ):  
+                counts  = resampling_counts( results[qc], resampling=resampling )
+                self._counts.append( counts )
+        del results
         
         rho = np.array([1,0,0,0])
         Detector = np.array([ [1,0], [0,0], [0,0], [0,1] ])
@@ -140,6 +158,8 @@ class tomographic_gate_set_tomography:
         rho_hat_all    = []
         Detetor_hat_all = []
         Gates_hat_all   = []
+        funs_all        = []
+        entropies_all   = []
         for m in range(self._n) :
             probs = []
             ran   = [m]
@@ -148,13 +168,23 @@ class tomographic_gate_set_tomography:
                 probs.append( probs_temp/np.sum(probs_temp)  )
             del probs_temp
             probs = np.array( probs ).reshape(4,4,4,2)
-            rho_hat, Detetor_hat, Gates_hat = qt.MaximumLikelihoodGateSetTomography( probs, rho, 
-                                                                                    Detector, Gates, 'gate_set')
-            rho_hat_all.append( rho_hat )
-            Detetor_hat_all.append( Detetor_hat )
-            Gates_hat_all.append( Gates_hat )
+            results = qt.MaximumLikelihoodGateSetTomography( probs, rho, 
+                                                            Detector, Gates, 'gate_set')
+            rho_hat_all.append( results.state )
+            Detetor_hat_all.append( results.measurement )
+            Gates_hat_all.append( results.process )
+            funs_all.append( results.fun )
+            entropies_all.append( results.entropy )
         
-        return [rho_hat_all, Detetor_hat_all, Gates_hat_all]
+        results = Results()
+        results.states       = rho_hat_all
+        results.measurements = Detetor_hat_all
+        results.processes    = Gates_hat_all
+        results.funs         = funs_all
+        results.entropies    = entropies_all
+
+        return results
+        # return [rho_hat_all, Detetor_hat_all, Gates_hat_all]
     
     def gateset2spam( self, gateset ):
         states_gst= []
@@ -412,7 +442,10 @@ class measurement_process_tomography:
                 self._gateset = True
                 self._states, self._measurements = gate_set
                 
-            Y_hat_all = []
+            Y_hat_all  = []
+            Pi_hat_all = []
+            funs_all   = []
+            entropies_all = []
             for m in range(self._p) :
                 ran = [ m, self._p+m ] 
                 probs = []
@@ -422,16 +455,19 @@ class measurement_process_tomography:
                 del probs_temp
                 probs = np.array(probs).reshape([6,3,2,2]).transpose(0,1,3,2).reshape(6,6,2).transpose(1,0,2)/3
                 if self._gateset is False :
-                    Y_hat = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
+                    results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
                                                                            self._measurements, 
                                                                            probs , Func = 0, 
                                                                            vectorized=True, out=out )
                 elif self._gateset is True : 
-                    Y_hat = qt.MaximumLikelihoodCompleteDetectorTomography( self._states[m], 
+                    results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states[m], 
                                                                            self._measurements[m], 
                                                                            probs, Func = 0, 
                                                                            vectorized=True, out=out )
-                Y_hat_all.append( Y_hat)
+                Pi_hat_all.append( results.measurement )
+                Y_hat_all.append( results.measurement_process )
+                funs_all.append( results.funs )
+                entropies_all.append( results.entropies)
         elif self._n == 2:  
             # self._counts = []
             # for qc in circuits:
@@ -495,7 +531,10 @@ class measurement_process_tomography:
                                     measures.append( measures_temp.flatten() )   
                     self._measures.append( np.array(measures).T ) 
             
-            Y_hat_all = []
+            Y_hat_all  = []
+            Pi_hat_all = []
+            funs_all   = []
+            entropies_all = []
             for m in range(self._p) :
                 ran = [ 2*m, 2*m+1, 2*self._p+2*m, 2*self._p+2*m+1 ]    
                 probs = []
@@ -511,16 +550,19 @@ class measurement_process_tomography:
                                                                            ).transpose(1,0,2)/3**2
                 self._probs_loop =  probs_loop 
                 if self._gateset is False :
-                    Y_hat = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
+                    results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
                                                                            self._measures, 
                                                                            probs_loop, Func = 0, 
                                                                            vectorized=True, out=out )
                 elif self._gateset is True :    
-                    Y_hat = qt.MaximumLikelihoodCompleteDetectorTomography( self._states[m], 
+                    results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states[m], 
                                                                            self._measures[m], 
                                                                            probs_loop, Func = 0, 
                                                                            vectorized=True, out=out )
-                Y_hat_all.append( Y_hat ) 
+                Pi_hat_all.append( results.measurement )
+                Y_hat_all.append( results.measurement_process )
+                funs_all.append( results.funs )
+                entropies_all.append( results.entropies)
         
         elif self._n == 3:
             probs = []
@@ -535,30 +577,72 @@ class measurement_process_tomography:
                                                                         2**self._n
                                                                         ).transpose(1,0,2)/3**self._n
 
-            Y_hat = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
+            results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
                                                                     self._measures, 
                                                                     probs, Func = 0, 
                                                                     vectorized=True, out=out )
+            Pi_hat_all    = results.measurement 
+            Y_hat_all     = results.measurement_process 
+            funs_all      = results.funs 
+            entropies_all = results.entropies
 
         # if len(Υ_hat_all) == 1 :
         #     return Υ_hat_all[0]
         # else:
-        return Y_hat_all
+
+        results = Results()
+        results.povms = Pi_hat_all
+        results.chois = Y_hat_all
+        results.funs  = funs_all
+        results.entropies = entropies_all
+
+        return results
                
 
 
 class device_process_measurement_tomography :
     
-    def __init__( self, backend, parall_qubits=None ) :
-        
-        self._backend    = backend
-        self._num_qubits = len( backend.properties().qubits )
-        
-        if parall_qubits is None:
+    def __init__( self, backend, 
+                    qubits        = None, 
+                    parall_qubits = None ) :
+
+        self._backend = backend
+        del backend
+
+        if isinstance( self._backend, IBMQBackend ):
+
+            self._num_qubits_device = len( self._backend.properties().qubits )
+
+            if qubits is None:     
+                self._num_qubits = self._num_qubits_device   
+                self._qubits     = list(range(self._num_qubits))
+            else:
+                self._qubits = qubits
+                self._num_qubits = len(self._qubits)
+
             coupling_map = get_backend_conectivity( self._backend )
-        
+
+        elif isinstance( self._backend, dict ):
+            self._num_qubits_device = self._backend['num_qubits']
+            coupling_map            = self._backend['coupling_map']
+
+        else:
+            self._num_qubits_device = len( self._backend.properties().qubits )
+
+            if qubits is None:     
+                self._num_qubits = self._num_qubits_device   
+                self._qubits     = list(range(self._num_qubits))
+            else:
+                self._qubits = qubits
+                self._num_qubits = len(self._qubits)
+
+            coupling_map = get_backend_conectivity( self._backend )
+
+
+        if parall_qubits is None:
+            
             G = nx.Graph()
-            G.add_node( range(self._num_qubits) )
+            G.add_node( range(self._num_qubits_device) )
             G.add_edges_from(coupling_map)
             G = nx.generators.line.line_graph(G)
             G_coloring = nx.coloring.greedy_color(G)
@@ -569,47 +653,67 @@ class device_process_measurement_tomography :
                     parall_qubits[G_coloring[x]] = []
                 parall_qubits[G_coloring[x]].append(x)
     
-            
-        circs_all = [ tomographic_gate_set_tomography( self._num_qubits ).circuits(), 
-                     measurement_process_tomography( 1, self._num_qubits ).circuits() ]
-    
-        for pairs in parall_qubits :
-    
-            p = len(pairs)
-            qubits = pairs
-            qubits = [item for t in qubits for item in t]
-            circ_double = measurement_process_tomography( 2, p ).circuits()
-            circs = []
-            for circ_loop in circ_double:
-                circ = QuantumCircuit( self._num_qubits, 4*p, 
-                                        name=circ_loop.name+'_'+str(qubits).replace(' ','') )
-                circ.compose(circ_loop, qubits=qubits, inplace=True)
-                circs.append( circ )
-            circs_all.append( circs )
-            
-        self._circuits = circs_all
-        self._parall_qubits = parall_qubits
-        
+        self._parall_qubits = parall_qubits    
 
-    def circuits( self ):
+    def circuits( self, label_qubits=True, gate_set=True, name=None ):
         """
         Circuits to perform the process measurement tomography of each pair of connected qubits on a device.
         
         """
+        if name is None:
+            name = ''
+        else:
+            name = name+'_'
+
+        if self._num_qubits == self._num_qubits_device:
+            self._circuits = [ tomographic_gate_set_tomography( self._num_qubits ).circuits(), 
+                            measurement_process_tomography( 1, self._num_qubits ).circuits() ]
+
+        else :
+            if gate_set is True:
+                circs_gst = tomographic_gate_set_tomography( self._num_qubits ).circuits()
+                circs_gst_all = []
+                for circ_loop in circs_gst:
+                    circ_temp = QuantumCircuit( self._num_qubits_device, self._num_qubits, 
+                                                name=name+circ_loop.name )
+                    circ_temp.compose( circ_loop, qubits=self._qubits, inplace=True)
+                    circs_gst_all.append( circ_temp )
+
+            circs_single = measurement_process_tomography( 1, self._num_qubits ).circuits()
+            circs_single_all = []
+            for circ_loop in circs_single:
+                circ_temp = QuantumCircuit( self._num_qubits_device, 2*self._num_qubits, 
+                                            name=name+circ_loop.name )
+                circ_temp.compose( circ_loop, qubits=self._qubits, inplace=True)
+                circs_single_all.append( circ_temp )
         
-        circuits = []
-        for circuits_idx in self._circuits:
-            circuits += circuits_idx
+            self._circuits = [ circs_gst_all, circs_single_all ]
+
+        for pairs in self._parall_qubits :
+            p = len(pairs)
+            qubits = pairs
+            qubits = [item for t in qubits for item in t]
+            circ_double = measurement_process_tomography( 2, p ).circuits()
+            circ_double_all = []
+            for circ_loop in circ_double:
+                if label_qubits is True:
+                    circ = QuantumCircuit( self._num_qubits_device, 4*p, 
+                                            name=name+circ_loop.name+'_'+str(qubits).replace(' ','') )
+                else:
+                    circ = QuantumCircuit( self._num_qubits_device, 4*p )
+                circ.compose(circ_loop, qubits=qubits, inplace=True)
+                circ_double_all.append( circ )
+            self._circuits.append( circ_double_all )
         
-        return circuits
+        return [ circ for circ_list in self._circuits for circ in circ_list  ]
 
     
     def fit( self, results, out=1, resampling=0, paralell=True, gate_set=False ):
         
-        gateset = tomographic_gate_set_tomography( self._num_qubits ).fit( results, 
+        results_gst = tomographic_gate_set_tomography( self._num_qubits ).fit( results, 
                                                          self._circuits[0], 
                                                          resampling = resampling )
-            
+        gateset = [ results_gst.states, results_gst.measurements, results_gst.processes ]  
         states_gst= []
         measures_gst = []
         for m in range(self._num_qubits):
@@ -630,15 +734,15 @@ class device_process_measurement_tomography :
         measures_gst = np.array( measures_gst )
         
         if gate_set is False:
-            choi_single = measurement_process_tomography(1,self._num_qubits).fit( results, 
+            results_single = measurement_process_tomography(1,self._num_qubits).fit( results, 
                                                            self._circuits[1], 
                                                            resampling=resampling,
                                                            out = out)
             if paralell is False:
-                choi_double = []
+                results_double = []
                 for k in range(2,len(self._circuits)):
                     qubits = np.array(self._parall_qubits[k-2]).flatten()
-                    choi_double.append( measurement_process_tomography(2,len(self._parall_qubits[k-2])).fit( 
+                    results_double.append( measurement_process_tomography(2,len(self._parall_qubits[k-2])).fit( 
                                         results, 
                                         self._circuits[k], 
                                         resampling = resampling, 
@@ -649,24 +753,24 @@ class device_process_measurement_tomography :
                                         self._circuits[k], 
                                         resampling = resampling,
                                         out = out )
-                choi_double = Parallel(n_jobs=-1)( delayed( fun_par )(k) 
+                results_double = Parallel(n_jobs=-1)( delayed( fun_par )(k) 
                                                   for k in range(2,len(self._circuits)) )      
             
             
             
             
         elif gate_set is True:
-            choi_single = measurement_process_tomography(1,self._num_qubits).fit( results, 
+            results_single = measurement_process_tomography(1,self._num_qubits).fit( results, 
                                                                self._circuits[1], 
                                                                gate_set=[states_gst,measures_gst] ,
                                                                resampling=resampling,
                                                                out = out)
 
             if paralell is False:
-                choi_double = []
+                results_double = []
                 for k in range(2,len(self._circuits)):
                     qubits = np.array(self._parall_qubits[k-2]).flatten()
-                    choi_double.append( measurement_process_tomography(2,len(self._parall_qubits[k-2])).fit( 
+                    results_double.append( measurement_process_tomography(2,len(self._parall_qubits[k-2])).fit( 
                                         results, 
                                         self._circuits[k], 
                                         gate_set   = [ states_gst[qubits], measures_gst[qubits] ],
@@ -680,10 +784,15 @@ class device_process_measurement_tomography :
                                                       measures_gst[np.array(self._parall_qubits[k-2]).flatten()] ] ,
                                         resampling = resampling,
                                         out = out )
-                choi_double = Parallel(n_jobs=-1)( delayed( fun_par )(k) 
+                results_double = Parallel(n_jobs=-1)( delayed( fun_par )(k) 
                                                   for k in range(2,len(self._circuits)) ) 
         
-        return choi_single, choi_double, gateset 
+        results = Results()
+        results.single = results_single
+        results.double = results_double
+        results.gateset = results_gst
+
+        return results
                  
 
 
@@ -814,25 +923,34 @@ def Cross_Fidelity_POVM( Pi_single_1, Pi_single_2, Pi_double  ):
         f += qt.Fidelity( Pi0[i], Pi1[i] )/2
     return f
 
-def Cross_Error_Choi( Choi_single_1, Choi_single_2, Choi_double  ):
-    Y0 = [ qt.Process2Choi( A ) for A in Kron_Choi( Choi_single_1, Choi_single_2 )]
-    Y1 = [ qt.Process2Choi( A ) for A in Choi_double]
-    f = np.linalg.norm( np.array(Y0) - np.array(Y1) ) / np.sqrt( np.array(Y0).size )
-    return f
+def Cross_Error_Choi( Choi_single_1, Choi_single_2, Choi_double, norm=2  ):
 
-def Cross_Error_POVM( Pi_single_1, Pi_single_2, Pi_double  ):
+    Y0 = [ A for A in Kron_Choi( Choi_single_1, Choi_single_2 )]
+    Y1 = [ A for A in Choi_double]
+    f = 0
+    if norm=='diamond':
+        for j in range(4):
+            f += 0.5*DiamondNorm( Y0[j] - Y1[j], 'vec' ) #/ 0.5 * DiamondNorm( Y1[j], 'vec'  ) 
+    else:
+        for j in range(4):
+            f += np.linalg.norm( Y0[j] - Y1[j], norm ) #/ np.linalg.norm( Y1[j], norm ) 
+    return f / 4
+
+def Cross_Error_POVM( Pi_single_1, Pi_single_2, Pi_double, norm=2   ):
     Pi0 = [ np.kron(A,B) for A in Pi_single_1.reshape(2,2,2).transpose(1,2,0) 
            for B in Pi_single_2.reshape(2,2,2).transpose(1,2,0) ]
     Pi1 = Pi_double.reshape(4,4,4).transpose(1,2,0)
-    f = np.linalg.norm( np.array(Pi0) - np.array(Pi1) ) / np.sqrt( np.array(Pi0).size )
-    return f
+    f = 0
+    for j in range(4):
+        f += np.linalg.norm( Pi0[j] - Pi1[j], norm ) # / np.linalg.norm( Pi1[j], norm ) 
+    return f / 4
 
-def Cross_Quantities( Pi1, Choi1, Pi2, Choi2, Pi12, Choi12 ):
+def Cross_Quantities( Pi1, Choi1, Pi2, Choi2, Pi12, Choi12, norm_povm=2, norm_choi='diamond' ):
     
     # f = Cross_Fidelity_POVM( Pi1, Pi2, Pi12 )
     # q = Cross_Fidelity_Choi( Choi1, Choi2, Choi12 )
-    f1 = Cross_Error_POVM( Pi1, Pi2, Pi12 )
-    q1 = Cross_Error_Choi( Choi1, Choi2, Choi12 )
+    f1 = Cross_Error_POVM( Pi1, Pi2, Pi12, norm_povm )
+    q1 = Cross_Error_Choi( Choi1, Choi2, Choi12, norm_choi )
     return f1, q1
 
 def Cross_Probability( f1, f2, pairs ):
@@ -854,7 +972,7 @@ def cross_qndness( choi1, choi2, choi12 ):
                      - choi1[n][(1+d)*n,(1+d)*n]*choi2[m][(1+d)*m,(1+d)*m]  )**2      
     return np.sqrt( f )    # / np.sqrt(N**2   )
 
-def cross_fidelity( Pi1, Pi2, Pi12 ):
+def cross_fidelity( Pi1, Pi2, Pi12):
     d, N = Pi1.shape
     d = int(np.sqrt(d))
     f = 0.
@@ -866,88 +984,43 @@ def cross_fidelity( Pi1, Pi2, Pi12 ):
     return np.sqrt( f ) # / np.sqrt(N**2) 
 
 
+def DiamondNorm( Y, type='choi' ):
 
-###################### Plots ############################
+    dim = int( np.sqrt( Y.shape[0] ) )
 
-# def sph2cart(r, theta, phi):
-#     '''spherical to Cartesian transformation.'''
-#     x = r * np.sin(theta) * np.cos(phi)
-#     y = r * np.sin(theta) * np.sin(phi)
-#     z = r * np.cos(theta)
-#     return x, y, z
+    if type == 'vec':
+        Yu = qt.Process2Choi( Y )
 
-# def sphview(ax):
-#     '''returns the camera position for 3D axes in spherical coordinates'''
-#     r = np.square(np.max([ax.get_xlim(), ax.get_ylim()], 1)).sum()
-#     theta, phi = np.radians((90-ax.elev, ax.azim))
-#     return r, theta, phi
+    delta_choi = Y
 
-# def getDistances(view, xpos, ypos, dz):
-#     distances  = []
-#     for i in range(len(xpos)):
-#         distance = (xpos[i] - view[0])**2 + (ypos[i] - view[1])**2 + (dz[i] - view[2])**2
-#         distances.append(np.sqrt(distance))
-#     return distances
+    # Density matrix must be Hermitian, positive semidefinite, trace 1
+    rho = cvx.Variable([dim, dim], complex=True)
+    constraints = [rho == rho.H]
+    constraints += [rho >> 0]
+    constraints += [cvx.trace(rho) == 1]
 
-# def Bar3D( A , ax = None, xpos=None, ypos=None, zpos=None, dx=None, dy=None, M = 0, **args ):
-    
-#     d = A.shape[0]
-#     camera = np.array([13.856, -24. ,0])
-    
-#     if xpos is None :
-#         xpos = np.arange(d) 
-#     if ypos is None :
-#         ypos = np.arange(d)
-#     xpos, ypos = np.meshgrid( xpos, ypos )
-#     xpos = xpos.flatten()
-#     ypos = ypos.flatten()
-    
-#     if zpos is None :
-#         zpos = np.zeros_like(xpos)
-#     else :
-#         zpos = zpos.flatten()
-    
-#     if dx is None :
-#         dx = 0.5 * np.ones_like(xpos)
-#     else :
-#         dx = dx * np.ones_like(ypos)
-        
-#     if dy is None :
-#         dy = 0.5 * np.ones_like(ypos)
-#     else :
-#         dy = dy * np.ones_like(ypos)
-    
-#     dz = A.flatten()
-#     z_order = getDistances(camera, xpos, ypos, zpos)
-    
-#     if ax == None :
-#         fig = plt.figure()   
-#         ax  = fig.add_subplot( 1,1,1, projection='3d')  
-#     maxx    = np.max(z_order) + M
-    
-#     plt.rc('font', size=15) 
-#     for i in range(xpos.shape[0]):
-#         pl = ax.bar3d(xpos[i], ypos[i], zpos[i], 
-#                       dx[i], dy[i], dz[i], 
-#                       zsort='max', **args )
-#         pl._sort_zpos = maxx - z_order[i]
-#         ax.set_xticks( [0.25,1.25,2.25,3.25] )
-#         ax.set_xticklabels((r'$|gg\rangle$',r'$|ge\rangle$',
-#                                 r'$|eg\rangle$',r'$|ee\rangle$'))
-#         ax.set_yticks( [0.25,1.25,2.25,3.25] )
-#         ax.set_yticklabels((r'$\langle gg|$',r'$\langle ge|$',
-#                                 r'$\langle eg|$',r'$\langle ee|$'))
-#         ax.set_title( label, loc='left', fontsize=20, x = 0.1, y=.85)
-#         ax.set_zlim([0,1])
-#     return ax            
+    # W must be Hermitian, positive semidefinite
+    W = cvx.Variable([dim ** 2, dim ** 2], complex=True)
+    constraints += [W == W.H]
+    constraints += [W >> 0]
 
+    constraints += [(W - cvx.kron(np.eye(dim), rho)) << 0]
 
-# def Abs_Bars3D(Y):
-#     fig = plt.figure(figsize=(len(Y)*4,5)) 
-#     for y in range(len(Y)):
-#         ax  = fig.add_subplot( 1, len(Y), y+1,  projection='3d')
-#         Bar3D( np.abs( Y[y] ).T, ax=ax )   
-#     return fig
+    J = cvx.Parameter([dim ** 2, dim ** 2], complex=True)
+    objective = cvx.Maximize(cvx.real(cvx.trace(J.H @ W)))
+
+    prob = cvx.Problem(objective, constraints)
+
+    J.value = delta_choi
+    prob.solve()
+
+    dnorm = prob.value * 2
+
+    # Diamond norm is between 0 and 2. Correct for floating point errors
+    dnorm = min(2, dnorm)
+    dnorm = max(0, dnorm)
+
+    return dnorm
 
 
             

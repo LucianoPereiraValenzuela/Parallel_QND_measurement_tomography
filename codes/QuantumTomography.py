@@ -9,6 +9,11 @@ from scipy.optimize import minimize, least_squares
 
 # In[2]:
 
+class Results:
+    # class for results of tomography
+    def __init__(self) -> None:
+        pass
+
 def Outer2Kron( A, Dims ):
     # From vec(A) outer vec(B) to A kron B
     N   = len(Dims)
@@ -331,11 +336,11 @@ def LikelihoodFunction( counts_th, counts_ex, Func=0):
     counts_ex = counts_ex.flatten()
     if Func == 0: #Multinomial
         #counts_th[counts_ex == 0] = 1
-        LogLikelihood = -np.sum( counts_ex*np.log10(counts_th + 1e-10) )
+        LogLikelihood = -np.sum( counts_ex*np.log10(counts_th + 1e-16) )
     elif Func == 1: #Chi-Square
-        LogLikelihood = np.sum( (counts_th - counts_ex)**2/(counts_ex + 1e-10 ) )
+        LogLikelihood = np.sum( (counts_th - counts_ex)**2/(counts_ex + 1e-16 ) )
     elif Func == 2: #Normal
-        LogLikelihood = np.sum( (counts_th - counts_ex)**2/(counts_th + 1e-10 ) )
+        LogLikelihood = np.sum( (counts_th - counts_ex)**2/(counts_th + 1e-16 ) )
     elif Func == 3: #Square Error 
         LogLikelihood = np.sum( (counts_th - counts_ex)**2 )
     return LogLikelihood
@@ -433,7 +438,13 @@ def MaximumLikelihoodDetectorTomography( ProveStates, counts, Guess = [] , Func 
     Estimate = np.array([ CholeskyVector2PositiveMatrix( t.reshape([-1,Dim**2] )[k,:] ).flatten() for k in range(Num) ]).T
     norm     = np.trace(np.sum(Estimate,1).reshape(Dim,Dim))
     Estimate = Dim * Estimate / norm
-    return Estimate
+
+    result             = Results()
+    result.measurement = Estimate
+    result.fun         = fun(t) 
+    result.entropy     = LikelihoodFunction( counts, counts, Func )
+
+    return result
 
 def LinearProcessTomography(States, Measurements, counts, vectorized = False ):
     if vectorized == False:
@@ -487,8 +498,12 @@ def MaximumLikelihoodProcessTomography( States, Measurements, counts, Guess = []
     constraints = ({'type': 'eq', 'fun': lambda t:  la.norm( PartialTrace( CholeskyVector2PositiveMatrix( t , Dim ) ,[Dim,Dim], 0) - np.eye(Dim) ) })
     results = minimize( fun, t_guess, bounds = tuple(len(t_guess)*[(-1,1)]), method = 'SLSQP', constraints = constraints)  
     t = results.x
-    Estimate = Process2Choi( CholeskyVector2PositiveMatrix ( t, Dim) )
-    return Estimate
+    result = Results()
+    result.measurement = Process2Choi( CholeskyVector2PositiveMatrix ( t, Dim) )
+    result.fun = fun(t) 
+    result.entropy = LikelihoodFunction( counts, counts, Func )
+
+    return result
 
 
 # In[6]:
@@ -518,11 +533,13 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
     Num = Probs_ex.shape[2]
     
     if Pi is None:
-        Probs_0 = np.sum( Probs_ex , 0).T
-        Pi = MaximumLikelihoodDetectorTomography( States, Probs_0, vectorized = True , Func = Func )
+        Probs_0   = np.sum( Probs_ex , 0).T
+        results_0 = MaximumLikelihoodDetectorTomography( States, Probs_0, vectorized = True , Func = Func )
+        Pi        = results_0.measurement
         
     Choiv = []
-    
+    funs  = [ results_0.fun ]
+    entropies = [ results_0.entropy ]
     for k in range(Num):
         Choiv_Lin  = LinearProcessTomography( States, Measurements, Probs_ex[:,:,k], vectorized = True )
 #         print(Choiv_Lin)
@@ -534,7 +551,8 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
         t_guess   = PositiveMatrix2CholeskyVector( Y_guess )
         Probs_th  = lambda t : np.real( Measurements.conj().T @ Process2Choi( CholeskyVector2PositiveMatrix( t ) )@States )  
         fun       = lambda t : LikelihoodFunction( Probs_th(t), Probs_ex[:,:,k], Func )
-        con       = lambda t:  la.norm( PartialTrace( CholeskyVector2PositiveMatrix( t ) ,[Dim,Dim], 0).T.flatten() - Pi[:,k].flatten() )**2 
+        con       = lambda t:  la.norm( PartialTrace( CholeskyVector2PositiveMatrix( t ),
+                                            [Dim,Dim], 0).T.flatten() - Pi[:,k].flatten() )**2 
         
 #         print( 'prob',Probs_th(t_guess), Probs_ex[:,:,k])  
 #         print( 'fun_in', fun(t_guess), con(t_guess) )      
@@ -545,18 +563,30 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
         
 #         print( 'fun_out', fun(t), con(t) )
         
-        Ye = Process2Choi( CholeskyVector2PositiveMatrix( t ) )
+        Ye = CholeskyVector2PositiveMatrix( t )
+        Ye = Process2Choi( Ye )
         Choiv.append( Ye ) 
-        
+        # funs.append( fun(t) )
+        entropies.append( LikelihoodFunction( Probs_ex[:,:,k], Probs_ex[:,:,k], Func ) )
+
     norm = np.trace( Process2Choi( np.sum( Choiv, 0 ) ) )
-    
     for k in range(Num):
         Choiv[k] = Dim * Choiv[k] / norm
-      
-    if out == 0 :
-        return Choiv
-    elif out == 1:
-        return Pi, Choiv
+        t = PositiveMatrix2CholeskyVector( Process2Choi(Choiv[k]) )
+    funs.append( fun(t) )
+
+    results = Results()
+    results.measurement         = Pi
+    results.measurement_process = Choiv
+    results.funs                = funs
+    results.entropies           = entropies
+
+    return results
+
+    # if out == 0 :
+    #     return Choiv
+    # elif out == 1:
+    #     return Pi, Choiv
 
 
 # In[7]:
@@ -625,7 +655,11 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
         
     results = minimize( fun, t0, constraints = ({'type': 'eq', 'fun': con }), method = 'SLSQP'  ) # , bounds = tuple(len(t0)*[(-1,1)])
     t = results.x
-        
+
+    results         = Results()   
+    results.fun     = fun( t )
+    results.entropy = LikelihoodFunction( counts, counts, 0 )
+
     #if fun(t0) < fun(t):
     #    t = t0
     
@@ -640,8 +674,8 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     t0 = Complex2Real(np.eye(Dim,dtype=complex).flatten()).flatten()
     B_t = lambda t : np.kron( UnitaryProjection( Real2Complex(t.reshape([2,-1])).reshape(2*[Dim]) ), UnitaryProjection( Real2Complex(t.reshape([2,-1])).reshape(2*[Dim]) ).conj() )
     fun = lambda t : GaugeFix_Fun( t, State, Detector, Gates, rho_tarjet, Pi_tarjet, Gamma_tarjet, B_t, gauge )
-    results = least_squares( fun, t0, bounds= (-1,1) )  
-    B = B_t(results.x)
+    results_ls = least_squares( fun, t0, bounds= (-1,1) )  
+    B = B_t(results_ls.x)
   
     State    = B@State
     Detector = la.inv(B).conj().T@Detector
@@ -650,7 +684,12 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     for j in range(N_Gates):
         Gates[j] = Dim * Gates[j] / np.trace( Process2Choi( Gates[j] ) )
     
-    return State, Detector, Gates
+    
+    results.state       = State
+    results.measurement = Detector
+    results.process     = Gates
+
+    return results
     
 def UnitaryProjection(Z):
     U = Z@la.fractional_matrix_power( Z.conj().T@Z , -0.5 )
