@@ -336,7 +336,7 @@ def LikelihoodFunction( counts_th, counts_ex, Func=0):
     counts_ex = counts_ex.flatten()
     if Func == 0: #Multinomial
         #counts_th[counts_ex == 0] = 1
-        LogLikelihood = -np.sum( counts_ex*np.log10(counts_th + 1e-16) )
+        LogLikelihood = - np.sum( counts_ex*np.log10(counts_th + 1e-16) )  
     elif Func == 1: #Chi-Square
         LogLikelihood = np.sum( (counts_th - counts_ex)**2/(counts_ex + 1e-16 ) )
     elif Func == 2: #Normal
@@ -419,25 +419,33 @@ def ProbabilityOperatorsProjection(Pi):
     
     return Pi
     
+def POVM_from_t( t, Dim, Num ):
+    POVM = np.array([ CholeskyVector2PositiveMatrix( t.reshape([-1,Dim**2] )[k,:] ).flatten() for k in range(Num) ])
+    POVM = POVM.reshape(Num, Dim**2).T
+    norm = np.trace(np.sum(POVM,1).reshape(Dim,Dim))
+    return Dim*POVM/norm 
 
-def MaximumLikelihoodDetectorTomography( ProveStates, counts, Guess = [] , Func = 1, vectorized=False ):
+def MaximumLikelihoodDetectorTomography( ProveStates, counts, Guess = None , Func = 1, vectorized=False ):
+    
     if vectorized == False:
         ProveStates = VectorizeVectors(ProveStates)
+    
     Dim = int(np.sqrt(ProveStates[:,0].size))
     Num = counts[:,0].size
-    if not Guess:
+    
+    if Guess is None:
         Guess = ProbabilityOperatorsProjection( LinearDetectorTomography( ProveStates, counts, True ) )
     t_guess   = np.array([ PositiveMatrix2CholeskyVector(Guess[:,k].reshape([Dim,Dim])) for k in range(Num) ]).flatten() 
-    counts_th = lambda t : np.real( 
-                    np.array([ CholeskyVector2PositiveMatrix( t.reshape([-1,Dim**2] )[k,:] ).flatten() for k in range(Num) ]).conj()@ProveStates )    
+    
+    counts_th   = lambda t : np.real( POVM_from_t( t, Dim, Num ).T.conj()@ProveStates )    
     fun         = lambda t : LikelihoodFunction( counts_th(t), counts, Func )
     constraints = ({'type': 'eq', 'fun': lambda t: la.norm(
-                    np.sum(np.array([ CholeskyVector2PositiveMatrix( t.reshape([-1,Dim**2] )[k,:] ).flatten() for k in range(Num) ]),0)-np.eye(Dim).flatten() ) })
-    results  = minimize( fun, t_guess, constraints = constraints, method = 'SLSQP' )  
+                    np.sum(POVM_from_t( t, Dim, Num ), axis=1).flatten() - np.eye(Dim).flatten() ) })
+    
+    results  = minimize( fun, t_guess, constraints = constraints, method = 'SLSQP',
+                        options={'maxiter': 250, 'ftol': 1e-06} )  
     t        = results.x
-    Estimate = np.array([ CholeskyVector2PositiveMatrix( t.reshape([-1,Dim**2] )[k,:] ).flatten() for k in range(Num) ]).T
-    norm     = np.trace(np.sum(Estimate,1).reshape(Dim,Dim))
-    Estimate = Dim * Estimate / norm
+    Estimate = POVM_from_t( t, Dim, Num )
 
     result             = Results()
     result.measurement = Estimate
@@ -531,41 +539,38 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
         
     Dim = int(np.sqrt(States.shape[0]))
     Num = Probs_ex.shape[2]
-    
+
+    povm_guess = np.zeros( (Dim,Dim,Num) )
+    povm_guess[ list(range(Dim)), list(range(Dim)), list(range(Num))  ] = 1
+    povm_guess = povm_guess.reshape(Dim**2, Num )
+
     if Pi is None:
         Probs_0   = np.sum( Probs_ex , 0).T
         results_0 = MaximumLikelihoodDetectorTomography( States, Probs_0, vectorized = True , Func = Func )
         Pi        = results_0.measurement
         
     Choiv = []
-    funs  = [ results_0.fun ]
-    entropies = [ results_0.entropy ]
+    funs  = []
+    funs0 = []
+    entropies = [  ]
+
     for k in range(Num):
         Choiv_Lin  = LinearProcessTomography( States, Measurements, Probs_ex[:,:,k], vectorized = True )
-#         print(Choiv_Lin)
-#         Choiv.append( Choiv_Lin )
         Y_guess    = PositiveOperatorProjection( Process2Choi( Choiv_Lin ), 2 )
-        
-#         print(k, Y_guess)
-        
+        # Y_guess   = np.zeros((Dim**2,Dim**2))
+        # Y_guess[ (Dim+1)*k, (Dim+1)*k] = 1
         t_guess   = PositiveMatrix2CholeskyVector( Y_guess )
+
         Probs_th  = lambda t : np.real( Measurements.conj().T @ Process2Choi( CholeskyVector2PositiveMatrix( t ) )@States )  
         fun       = lambda t : LikelihoodFunction( Probs_th(t), Probs_ex[:,:,k], Func )
         con       = lambda t:  la.norm( PartialTrace( CholeskyVector2PositiveMatrix( t ),
-                                            [Dim,Dim], 0).T.flatten() - Pi[:,k].flatten() )**2 
-        
-#         print( 'prob',Probs_th(t_guess), Probs_ex[:,:,k])  
-#         print( 'fun_in', fun(t_guess), con(t_guess) )      
+                                            [Dim,Dim], 0).T.flatten() - Pi[:,k].flatten() )**2    
         
         constraints = ({'type': 'eq', 'fun': con })
-        results   = minimize( fun, t_guess, constraints = constraints, method = 'SLSQP' )  
-        t         = results.x
-        
-#         print( 'fun_out', fun(t), con(t) )
-        
-        Ye = CholeskyVector2PositiveMatrix( t )
-        Ye = Process2Choi( Ye )
-        Choiv.append( Ye ) 
+        results     = minimize( fun, t_guess, constraints = constraints, method = 'SLSQP', 
+                                options={'maxiter': 250, 'ftol': 1e-07} )  
+        t           = results.x   
+        Choiv.append( Process2Choi( CholeskyVector2PositiveMatrix( t ) ) ) 
         # funs.append( fun(t) )
         entropies.append( LikelihoodFunction( Probs_ex[:,:,k], Probs_ex[:,:,k], Func ) )
 
@@ -573,12 +578,13 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
     for k in range(Num):
         Choiv[k] = Dim * Choiv[k] / norm
         t = PositiveMatrix2CholeskyVector( Process2Choi(Choiv[k]) )
-    funs.append( fun(t) )
+        funs.append( fun(t) )
 
     results = Results()
     results.measurement         = Pi
     results.measurement_process = Choiv
     results.funs                = funs
+    results.funs0               = funs0
     results.entropies           = entropies
 
     return results
@@ -653,7 +659,8 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     fun = lambda t : LikelihoodFunction( Counts_GQT(t,Dim,N_outcomes,N_Gates), counts, 0 )
     con = lambda t : Constraints_GSQT( t, Dim, N_outcomes, N_Gates )
         
-    results = minimize( fun, t0, constraints = ({'type': 'eq', 'fun': con }), method = 'SLSQP'  ) # , bounds = tuple(len(t0)*[(-1,1)])
+    results = minimize( fun, t0, constraints = ({'type': 'eq', 'fun': con }), 
+                        method = 'SLSQP', options={'maxiter': 250, 'ftol': 1e-06}  ) # , bounds = tuple(len(t0)*[(-1,1)])
     t = results.x
 
     results         = Results()   
@@ -701,9 +708,10 @@ def Counts_GQT(t,Dim,N_outcomes,N_Gates):
     t_Detector = t[1:1+N_outcomes,:]
     t_Gates    = t[1+N_outcomes:,:].reshape(-1,Dim**4)
     
-    rho      = CholeskyVector2PositiveMatrix(t_state,1).flatten()
-    Detector =  np.array([ CholeskyVector2PositiveMatrix(t_Detector[k,:]).flatten() for k in range(N_outcomes)]).T
-    Gates    = np.array( [ Process2Choi(CholeskyVector2PositiveMatrix(t_Gates[k,:],Dim)) for k in range(N_Gates) ] )
+    rho      = CholeskyVector2PositiveMatrix( t_state, 1 ).flatten()
+    # Detector = np.array([ CholeskyVector2PositiveMatrix(t_Detector[k,:]).flatten() for k in range(N_outcomes)]).T
+    Detector = POVM_from_t(t_Detector, Dim, Dim )
+    Gates    = np.array( [ Process2Choi(CholeskyVector2PositiveMatrix(t_Gates[k,:])) for k in range(N_Gates) ] )
     
     Counts   = np.array( [[[ Detector.conj().T@Gates[j,:,:]@Gates[k,:,:]@Gates[i,:,:]@rho for j in range(N_Gates)]for i in range(N_Gates)]for k in range(N_Gates)] )
     
@@ -714,11 +722,11 @@ def Constraints_GSQT(t,Dim,N_outcomes,N_Gates):
     t_state = t[0,:]
     t_Detector = t[1:1+N_outcomes,:]
     t_Gates = t[1+N_outcomes:,:].reshape(-1,Dim**4)
-    f1 = la.norm( np.sum(np.array([ CholeskyVector2PositiveMatrix(t_Detector[k,:]).flatten() for k in range(N_outcomes) ]),0) - np.eye(Dim).flatten() )**2
+    f1 = la.norm( np.sum(POVM_from_t(t_Detector, Dim, Dim ),1).flatten() - np.eye(Dim).flatten() )**2
     f2 = la.norm( np.array([ PartialTrace( CholeskyVector2PositiveMatrix(t_Gates[k,:]) ,[Dim,Dim], 0).flatten() - np.eye(Dim).flatten() for k in range(N_Gates) ]) )**2
     return np.append(f2,f1)
 
-def GaugeFix_Fun(t,rho,Pi,Gamma,rho_tarjet,Pi_tarjet,Gamma_tarjet,B_t,gauge='gate_set'):
+def GaugeFix_Fun( t, rho, Pi, Gamma, rho_tarjet, Pi_tarjet, Gamma_tarjet, B_t, gauge='gate_set'):
     B = B_t(t)
     invB = la.inv(B)
     

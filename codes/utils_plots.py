@@ -57,4 +57,24 @@ def Plot_Chois(  choi, error_choi=None, axes=None, z_lim = 0.1, shape = None, te
         ax.set_zlim([0,z_lim])
     
     return axes
+
+
+def set_ticks( axes, x_pos, x_ticks, y_pos, y_ticks, label_pos , Labels):
+
+    j = 0
+    for ax in axes:
+        ax.set_xticks( x_pos )
+        ax.set_xticklabels( x_ticks )
+        ax.set_yticks( y_pos )
+        ax.set_yticklabels( y_ticks )
+        ax.text( label_pos[0], label_pos[1], label_pos[2], Labels[j], size = 28 )
+
+        plt.setp( ax.xaxis.get_majorticklabels(), rotation=45, ha="right" , rotation_mode="anchor")
+        plt.setp( ax.yaxis.get_majorticklabels(), rotation=-45, ha="left" , rotation_mode="anchor")
+        ax.tick_params(axis='x', pad=-3)
+        ax.tick_params(axis='y', pad=-3)
+        ax.tick_params(axis='z', rotation=-15, pad=10)
+        j += 1
+
+    return axes
     

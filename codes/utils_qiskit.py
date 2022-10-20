@@ -46,3 +46,11 @@ def save_results( results, name=None , folder=None):
 
     with open(folder+name+'.json', 'w') as f:
         json.dump(dic, f)
+
+
+def load_results( name, folder=None ):
+
+    with open('{}/{}.json'.format(folder,name), 'r') as f:
+        results_job = dict2results( json.load(f) )
+
+    return results_job
