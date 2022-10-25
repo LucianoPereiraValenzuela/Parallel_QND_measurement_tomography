@@ -643,7 +643,7 @@ def LinearGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gates_tarjet ):
     
     return B@State, la.inv(B).T.conj()@Detector, B@Gates@la.inv(B)
 
-def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarjet, gauge='gate_set' ):
+def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarjet, gauge='detector' ):
     
     State, Detector, Gates = LinearGateSetTomography( counts, rho_tarjet, Pi_tarjet, Gamma_tarjet )
     
@@ -675,8 +675,8 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     t_Detector = t[1:1+N_outcomes,:]
     t_Gates    = t[1+N_outcomes:,:].reshape(-1,Dim**4)
     State      = CholeskyVector2PositiveMatrix( t_state, 1 ).flatten()
-    Detector   = np.array([ CholeskyVector2PositiveMatrix(t_Detector[k,:]).flatten() for k in range(N_outcomes)]).T.reshape(Dim**2,N_outcomes)
-    Gates      = np.array([ Process2Choi( CholeskyVector2PositiveMatrix(t_Gates[k,:]) ) for k in range(N_Gates) ] )   
+    Detector   = POVM_from_t(t_Detector, Dim, Dim )
+    Gates      = np.array([ Process2Choi( CholeskyVector2PositiveMatrix(t_Gates[k,:], Dim) ) for k in range(N_Gates) ] )   
     
     t0 = Complex2Real(np.eye(Dim,dtype=complex).flatten()).flatten()
     B_t = lambda t : np.kron( UnitaryProjection( Real2Complex(t.reshape([2,-1])).reshape(2*[Dim]) ), UnitaryProjection( Real2Complex(t.reshape([2,-1])).reshape(2*[Dim]) ).conj() )
@@ -688,9 +688,8 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     Detector = la.inv(B).conj().T@Detector
     Gates    = B@Gates@la.inv(B)
     
-    for j in range(N_Gates):
-        Gates[j] = Dim * Gates[j] / np.trace( Process2Choi( Gates[j] ) )
-    
+    # for j in range(N_Gates):
+    #     Gates[j] = Dim * Gates[j] / np.trace( Process2Choi( Gates[j] ) )
     
     results.state       = State
     results.measurement = Detector
@@ -711,7 +710,7 @@ def Counts_GQT(t,Dim,N_outcomes,N_Gates):
     rho      = CholeskyVector2PositiveMatrix( t_state, 1 ).flatten()
     # Detector = np.array([ CholeskyVector2PositiveMatrix(t_Detector[k,:]).flatten() for k in range(N_outcomes)]).T
     Detector = POVM_from_t(t_Detector, Dim, Dim )
-    Gates    = np.array( [ Process2Choi(CholeskyVector2PositiveMatrix(t_Gates[k,:])) for k in range(N_Gates) ] )
+    Gates    = np.array( [ Process2Choi(CholeskyVector2PositiveMatrix( t_Gates[k,:], Dim ) ) for k in range(N_Gates) ] )
     
     Counts   = np.array( [[[ Detector.conj().T@Gates[j,:,:]@Gates[k,:,:]@Gates[i,:,:]@rho for j in range(N_Gates)]for i in range(N_Gates)]for k in range(N_Gates)] )
     
@@ -723,7 +722,7 @@ def Constraints_GSQT(t,Dim,N_outcomes,N_Gates):
     t_Detector = t[1:1+N_outcomes,:]
     t_Gates = t[1+N_outcomes:,:].reshape(-1,Dim**4)
     f1 = la.norm( np.sum(POVM_from_t(t_Detector, Dim, Dim ),1).flatten() - np.eye(Dim).flatten() )**2
-    f2 = la.norm( np.array([ PartialTrace( CholeskyVector2PositiveMatrix(t_Gates[k,:]) ,[Dim,Dim], 0).flatten() - np.eye(Dim).flatten() for k in range(N_Gates) ]) )**2
+    f2 = la.norm( np.array([ PartialTrace( CholeskyVector2PositiveMatrix(t_Gates[k,:], Dim ) ,[Dim,Dim], 0).flatten() - np.eye(Dim).flatten() for k in range(N_Gates) ]) )**2
     return np.append(f2,f1)
 
 def GaugeFix_Fun( t, rho, Pi, Gamma, rho_tarjet, Pi_tarjet, Gamma_tarjet, B_t, gauge='gate_set'):

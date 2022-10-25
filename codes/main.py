@@ -169,7 +169,7 @@ class tomographic_gate_set_tomography:
             del probs_temp
             probs = np.array( probs ).reshape(4,4,4,2)
             results = qt.MaximumLikelihoodGateSetTomography( probs, rho, 
-                                                            Detector, Gates, 'gate_set')
+                                                            Detector, Gates, 'detector')
             rho_hat_all.append( results.state )
             Detetor_hat_all.append( results.measurement )
             Gates_hat_all.append( results.process )
