@@ -665,29 +665,29 @@ class device_process_measurement_tomography :
         else:
             name = name+'_'
 
-        if self._num_qubits == self._num_qubits_device:
-            self._circuits = [ tomographic_gate_set_tomography( self._num_qubits ).circuits(), 
-                            measurement_process_tomography( 1, self._num_qubits ).circuits() ]
+        # if self._num_qubits == self._num_qubits_device:
+        #     self._circuits = [ tomographic_gate_set_tomography( self._num_qubits ).circuits(), 
+        #                     measurement_process_tomography( 1, self._num_qubits ).circuits() ]
 
-        else :
-            if gate_set is True:
-                circs_gst = tomographic_gate_set_tomography( self._num_qubits ).circuits()
-                circs_gst_all = []
-                for circ_loop in circs_gst:
-                    circ_temp = QuantumCircuit( self._num_qubits_device, self._num_qubits, 
-                                                name=name+circ_loop.name )
-                    circ_temp.compose( circ_loop, qubits=self._qubits, inplace=True)
-                    circs_gst_all.append( circ_temp )
-
-            circs_single = measurement_process_tomography( 1, self._num_qubits ).circuits()
-            circs_single_all = []
-            for circ_loop in circs_single:
-                circ_temp = QuantumCircuit( self._num_qubits_device, 2*self._num_qubits, 
+        # else :
+        if gate_set is True:
+            circs_gst = tomographic_gate_set_tomography( self._num_qubits ).circuits()
+            circs_gst_all = []
+            for circ_loop in circs_gst:
+                circ_temp = QuantumCircuit( self._num_qubits_device, self._num_qubits, 
                                             name=name+circ_loop.name )
                 circ_temp.compose( circ_loop, qubits=self._qubits, inplace=True)
-                circs_single_all.append( circ_temp )
-        
-            self._circuits = [ circs_gst_all, circs_single_all ]
+                circs_gst_all.append( circ_temp )
+
+        circs_single = measurement_process_tomography( 1, self._num_qubits ).circuits()
+        circs_single_all = []
+        for circ_loop in circs_single:
+            circ_temp = QuantumCircuit( self._num_qubits_device, 2*self._num_qubits, 
+                                        name=name+circ_loop.name )
+            circ_temp.compose( circ_loop, qubits=self._qubits, inplace=True)
+            circs_single_all.append( circ_temp )
+    
+        self._circuits = [ circs_gst_all, circs_single_all ]
 
         for pairs in self._parall_qubits :
             p = len(pairs)
