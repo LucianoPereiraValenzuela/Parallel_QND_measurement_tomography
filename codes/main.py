@@ -19,6 +19,83 @@ class Results:
     def gate_set(self):
         return [ self.states, self.measurements, self.processes ]
 
+    def quantities( self, input=None ):
+
+        if input is None:
+            povms = self.povms
+            chois = self.chois 
+
+        elif input == 'single':
+            povms = self.single.povms
+            chois = self.single.chois 
+
+        elif input == 'double':
+            povms = [ povm for temp in self.double for povm in temp.povms ]
+            chois = [ choi for temp in self.double for choi in temp.chois ]
+        
+        qs = []
+        for povm, choi in zip( povms, chois ):
+            qs.append( Quantities( povm, choi ) )
+
+        return qs
+
+    def cross_quantities( self ):
+
+        povms_single = self.single.povms
+        chois_single = self.single.chois 
+        povms_double = [ povm for temp in self.double for povm in temp.povms ]
+        chois_double = [ choi for temp in self.double for choi in temp.chois ]
+        parall_qubit = [ pair for group in self.parall_qubit for pair in group ]    
+
+        qs = []
+        for j, pair in enumerate(parall_qubit):
+            
+            q0 = pair[0]
+            q1 = pair[1]
+
+            qs.append( Cross_Quantities( povms_single[q0], chois_single[q0],
+                                        povms_single[q1], chois_single[q1], 
+                                        povms_double[j], chois_double[j] ) )
+        return qs 
+
+    def all_quantities( self, parall_qubit=None ):
+        quantities = results2quantities( self, parall_qubit )
+        return quantities
+
+def results2quantities( result, parall_qubit=None ):
+
+    if parall_qubit is None:
+        parall_qubit = result.parall_qubit
+
+    povms_single = result.single.povms
+    chois_single = result.single.chois 
+    povms_double = [ povm for temp in result.double for povm in temp.povms ]
+    chois_double = [ choi for temp in result.double for choi in temp.chois ]
+    parall_qubit = [ pair for group in parall_qubit for pair in group ]    
+
+    qs1 = []
+    for povm, choi in zip( povms_single, chois_single ):
+        qs1.append( Quantities( povm, choi ) )
+
+    qs2 = []
+    for povm, choi in zip( povms_double, chois_double ):
+        qs2.append( Quantities( povm, choi ) )
+
+    qs3 = []
+    qs4 = []
+    for j, pair in enumerate(parall_qubit):
+        
+        q0 = pair[0]
+        q1 = pair[1]
+
+        qs3.append( Cross_Quantities( povms_single[q0], chois_single[q0],
+                                    povms_single[q1], chois_single[q1], 
+                                    povms_double[j], chois_double[j] ) )
+
+        qs4.append( [ abs(qs1[q0][k]*qs1[q1][k] - qs2[j][k]) for k in range(2)]  )
+
+    return [ qs1, qs2, qs3, qs4 ]
+
 
 def get_noise( job ):
     readout_error = [ job.properties().readout_error(j) for j in range(7)  ]
@@ -80,7 +157,7 @@ def resampling_counts( counts, resampling=0 ):
         keys  = counts.keys()
         probs = np.array(list(counts.values()))
         probs = np.random.multinomial( resampling, probs/np.sum(probs) )
-        counts = dict(zip(keys, probs) )
+        counts = dict( zip(keys, probs) )
     
     return counts
 
@@ -177,11 +254,11 @@ class tomographic_gate_set_tomography:
             entropies_all.append( results.entropy )
         
         results = Results()
-        results.states       = rho_hat_all
-        results.measurements = Detetor_hat_all
-        results.processes    = Gates_hat_all
-        results.funs         = funs_all
-        results.entropies    = entropies_all
+        results.states       = rho_hat_all         
+        results.measurements = Detetor_hat_all    
+        results.processes    = Gates_hat_all       
+        results.funs         = funs_all          
+        results.entropies    = entropies_all     
 
         return results
         # return [rho_hat_all, Detetor_hat_all, Gates_hat_all]
@@ -791,6 +868,7 @@ class device_process_measurement_tomography :
         results.single = results_single
         results.double = results_double
         results.gateset = results_gst
+        results.parall_qubits = self._parall_qubits
 
         return results
                  
@@ -984,11 +1062,11 @@ def cross_fidelity( Pi1, Pi2, Pi12):
     return np.sqrt( f ) # / np.sqrt(N**2) 
 
 
-def DiamondNorm( Y, type='choi' ):
+def DiamondNorm( Y, form='choi' ):
 
     dim = int( np.sqrt( Y.shape[0] ) )
 
-    if type == 'vec':
+    if form == 'vec':
         Yu = qt.Process2Choi( Y )
 
     delta_choi = Y

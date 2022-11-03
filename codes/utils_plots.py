@@ -26,7 +26,8 @@ def BarPlot( A , yerr=None, colors = ['r','b','g','y','r','b','g','y','r','b','g
         
         if yerr is not None:
             for i in xs:
-                ax.plot( [i,i], [n, n], [A[n,i]+yerr[n,i], A[n,i]-yerr[n,i]], marker="_", color=cs)
+                if yerr[n,i] > 1e-3:
+                    ax.plot( [i,i], [n, n], [A[n,i]+yerr[n,i], A[n,i]-yerr[n,i]], marker="_", color=cs)
         
     return ax
     

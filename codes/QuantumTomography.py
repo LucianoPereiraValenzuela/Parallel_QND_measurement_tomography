@@ -449,8 +449,8 @@ def MaximumLikelihoodDetectorTomography( ProveStates, counts, Guess = None , Fun
 
     result             = Results()
     result.measurement = Estimate
-    result.fun         = fun(t) 
-    result.entropy     = LikelihoodFunction( counts, counts, Func )
+    result.fun         = [ LikelihoodFunction( counts_th(t), counts, k ) for k in range(4) ] 
+    result.entropy     = [ LikelihoodFunction( counts, counts, k ) for k in range(4) ]
 
     return result
 
@@ -508,8 +508,8 @@ def MaximumLikelihoodProcessTomography( States, Measurements, counts, Guess = []
     t = results.x
     result = Results()
     result.measurement = Process2Choi( CholeskyVector2PositiveMatrix ( t, Dim) )
-    result.fun = fun(t) 
-    result.entropy = LikelihoodFunction( counts, counts, Func )
+    result.fun         = [ LikelihoodFunction( counts_th(t), counts, k ) for k in range(4) ]
+    result.entropy     = [ LikelihoodFunction( counts, counts, k ) for k in range(4) ]
 
     return result
 
@@ -572,13 +572,13 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
         t           = results.x   
         Choiv.append( Process2Choi( CholeskyVector2PositiveMatrix( t ) ) ) 
         # funs.append( fun(t) )
-        entropies.append( LikelihoodFunction( Probs_ex[:,:,k], Probs_ex[:,:,k], Func ) )
+        entropies.append( [ LikelihoodFunction( Probs_ex[:,:,k], Probs_ex[:,:,k], j ) for j in range(4) ] )
 
     norm = np.trace( Process2Choi( np.sum( Choiv, 0 ) ) )
     for k in range(Num):
         Choiv[k] = Dim * Choiv[k] / norm
         t = PositiveMatrix2CholeskyVector( Process2Choi(Choiv[k]) )
-        funs.append( fun(t) )
+        funs.append( [ LikelihoodFunction( Probs_th(t), Probs_ex[:,:,k], j ) for j in range(4) ] )
 
     results = Results()
     results.measurement         = Pi
@@ -664,8 +664,8 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     t = results.x
 
     results         = Results()   
-    results.fun     = fun( t )
-    results.entropy = LikelihoodFunction( counts, counts, 0 )
+    results.fun     = [ LikelihoodFunction( Counts_GQT(t,Dim,N_outcomes,N_Gates), counts, k ) for k in range(4) ]
+    results.entropy = [ LikelihoodFunction( counts, counts, 1 ) for k in range(4) ]
 
     #if fun(t0) < fun(t):
     #    t = t0
