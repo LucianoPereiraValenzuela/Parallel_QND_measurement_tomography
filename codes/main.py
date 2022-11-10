@@ -96,7 +96,6 @@ def results2quantities( result, parall_qubit=None ):
 
     return [ qs1, qs2, qs3, qs4 ]
 
-
 def get_noise( job ):
     readout_error = [ job.properties().readout_error(j) for j in range(7)  ]
     T1 = [ job.properties().t1(j) for j in range(7)  ]
@@ -208,7 +207,7 @@ class tomographic_gate_set_tomography:
 
         return circ_gst        
         
-    def fit( self, results, circ_gst=None, resampling=0 ):
+    def fit( self, results, circ_gst=None, resampling=0, Func=0 ):
         
         if circ_gst is None :
             circ_gst = self._circ_gst
@@ -246,7 +245,7 @@ class tomographic_gate_set_tomography:
             del probs_temp
             probs = np.array( probs ).reshape(4,4,4,2)
             results = qt.MaximumLikelihoodGateSetTomography( probs, rho, 
-                                                            Detector, Gates, 'detector')
+                                                            Detector, Gates, 'detector', Func=Func)
             rho_hat_all.append( results.state )
             Detetor_hat_all.append( results.measurement )
             Gates_hat_all.append( results.process )
@@ -457,7 +456,7 @@ class measurement_process_tomography:
         return circs_mpt
                   
         
-    def fit( self, results, circuits=None, gate_set = None, resampling = 0, out = 0 ):         
+    def fit( self, results, circuits=None, gate_set = None, resampling = 0, out = 0, Func=2 ):         
                  
         if circuits is None :
             circuits = self._circuits
@@ -534,12 +533,12 @@ class measurement_process_tomography:
                 if self._gateset is False :
                     results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
                                                                            self._measurements, 
-                                                                           probs , Func = 0, 
+                                                                           probs , Func = Func, 
                                                                            vectorized=True, out=out )
                 elif self._gateset is True : 
                     results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states[m], 
                                                                            self._measurements[m], 
-                                                                           probs, Func = 0, 
+                                                                           probs, Func = Func, 
                                                                            vectorized=True, out=out )
                 Pi_hat_all.append( results.measurement )
                 Y_hat_all.append( results.measurement_process )
@@ -629,12 +628,12 @@ class measurement_process_tomography:
                 if self._gateset is False :
                     results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
                                                                            self._measures, 
-                                                                           probs_loop, Func = 0, 
+                                                                           probs_loop, Func = Func, 
                                                                            vectorized=True, out=out )
                 elif self._gateset is True :    
                     results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states[m], 
                                                                            self._measures[m], 
-                                                                           probs_loop, Func = 0, 
+                                                                           probs_loop, Func = Func, 
                                                                            vectorized=True, out=out )
                 Pi_hat_all.append( results.measurement )
                 Y_hat_all.append( results.measurement_process )
@@ -656,7 +655,7 @@ class measurement_process_tomography:
 
             results = qt.MaximumLikelihoodCompleteDetectorTomography( self._states, 
                                                                     self._measures, 
-                                                                    probs, Func = 0, 
+                                                                    probs, Func = Func, 
                                                                     vectorized=True, out=out )
             Pi_hat_all    = results.measurement 
             Y_hat_all     = results.measurement_process 
@@ -785,11 +784,11 @@ class device_process_measurement_tomography :
         return [ circ for circ_list in self._circuits for circ in circ_list  ]
 
     
-    def fit( self, results, out=1, resampling=0, paralell=True, gate_set=False ):
+    def fit( self, results, out=1, resampling=0, paralell=True, gate_set=False, Func=0 ):
         
         results_gst = tomographic_gate_set_tomography( self._num_qubits ).fit( results, 
                                                          self._circuits[0], 
-                                                         resampling = resampling )
+                                                         resampling = resampling, Func=Func )
         gateset = [ results_gst.states, results_gst.measurements, results_gst.processes ]  
         states_gst= []
         measures_gst = []
@@ -814,7 +813,7 @@ class device_process_measurement_tomography :
             results_single = measurement_process_tomography(1,self._num_qubits).fit( results, 
                                                            self._circuits[1], 
                                                            resampling=resampling,
-                                                           out = out)
+                                                           Func = Func )
             if paralell is False:
                 results_double = []
                 for k in range(2,len(self._circuits)):
@@ -823,13 +822,13 @@ class device_process_measurement_tomography :
                                         results, 
                                         self._circuits[k], 
                                         resampling = resampling, 
-                                        out = out  ) )
+                                        Func = Func  ) )
             elif paralell is True:
                 fun_par = lambda k : measurement_process_tomography(2,len(self._parall_qubits[k-2])).fit( 
                                         results, 
                                         self._circuits[k], 
                                         resampling = resampling,
-                                        out = out )
+                                        Func = Func )
                 results_double = Parallel(n_jobs=-1)( delayed( fun_par )(k) 
                                                   for k in range(2,len(self._circuits)) )      
             
@@ -841,7 +840,7 @@ class device_process_measurement_tomography :
                                                                self._circuits[1], 
                                                                gate_set=[states_gst,measures_gst] ,
                                                                resampling=resampling,
-                                                               out = out)
+                                                               Func = Func )
 
             if paralell is False:
                 results_double = []
@@ -852,7 +851,7 @@ class device_process_measurement_tomography :
                                         self._circuits[k], 
                                         gate_set   = [ states_gst[qubits], measures_gst[qubits] ],
                                         resampling = resampling, 
-                                        out = out  ) )
+                                        Func       = Func ) )
             elif paralell is True:
                 fun_par = lambda k : measurement_process_tomography(2,len(self._parall_qubits[k-2])).fit( 
                                         results, 
@@ -860,7 +859,7 @@ class device_process_measurement_tomography :
                                         gate_set   = [ states_gst[np.array(self._parall_qubits[k-2]).flatten()], 
                                                       measures_gst[np.array(self._parall_qubits[k-2]).flatten()] ] ,
                                         resampling = resampling,
-                                        out = out )
+                                        Func       = Func )
                 results_double = Parallel(n_jobs=-1)( delayed( fun_par )(k) 
                                                   for k in range(2,len(self._circuits)) ) 
         

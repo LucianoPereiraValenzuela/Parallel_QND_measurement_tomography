@@ -425,7 +425,7 @@ def POVM_from_t( t, Dim, Num ):
     norm = np.trace(np.sum(POVM,1).reshape(Dim,Dim))
     return Dim*POVM/norm 
 
-def MaximumLikelihoodDetectorTomography( ProveStates, counts, Guess = None , Func = 1, vectorized=False ):
+def MaximumLikelihoodDetectorTomography( ProveStates, counts, Guess = None , Func = 0, vectorized=False ):
     
     if vectorized == False:
         ProveStates = VectorizeVectors(ProveStates)
@@ -492,7 +492,7 @@ def PartialTrace(rho,Systems,Subsystem):
 #         rho = np.trace(rho.reshape(Systems+Systems), axis1=1, axis2=3)
     return rho
 
-def MaximumLikelihoodProcessTomography( States, Measurements, counts, Guess = [] , Func = 1, vectorized=False ):
+def MaximumLikelihoodProcessTomography( States, Measurements, counts, Guess = [] , Func = 0, vectorized=False ):
     if vectorized == False:
         States = VectorizeVectors(States)
         Measurements = VectorizeVectors(Measurements)  
@@ -502,7 +502,7 @@ def MaximumLikelihoodProcessTomography( States, Measurements, counts, Guess = []
         Guess = ProcessOperatorProjection( LinearProcessTomography( States, Measurements, counts, True) )
     t_guess = PositiveMatrix2CholeskyVector( Process2Choi(Guess) )
     counts_th = lambda t : np.real( Measurements.conj().T@Process2Choi( CholeskyVector2PositiveMatrix( t ) )@States )  
-    fun = lambda t : LikelihoodFunction(counts_th(t),counts,Func)
+    fun = lambda t : LikelihoodFunction( counts_th(t), counts, Func)
     constraints = ({'type': 'eq', 'fun': lambda t:  la.norm( PartialTrace( CholeskyVector2PositiveMatrix( t , Dim ) ,[Dim,Dim], 0) - np.eye(Dim) ) })
     results = minimize( fun, t_guess, bounds = tuple(len(t_guess)*[(-1,1)]), method = 'SLSQP', constraints = constraints)  
     t = results.x
@@ -643,7 +643,7 @@ def LinearGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gates_tarjet ):
     
     return B@State, la.inv(B).T.conj()@Detector, B@Gates@la.inv(B)
 
-def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarjet, gauge='detector' ):
+def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarjet, gauge='detector', Func=0 ):
     
     State, Detector, Gates = LinearGateSetTomography( counts, rho_tarjet, Pi_tarjet, Gamma_tarjet )
     
@@ -656,7 +656,7 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     t0_Gates    = np.array([PositiveMatrix2CholeskyVector( PositiveOperatorProjection( Kron2Outer(Gates[k,:,:], [Dim,Dim] ), 2 )) for k in range(N_Gates)    ]) #size Dim**2xN_Gates
     t0 = np.concatenate((t0_state,t0_Detector.flatten(),t0_Gates.flatten()), axis=0)
     
-    fun = lambda t : LikelihoodFunction( Counts_GQT(t,Dim,N_outcomes,N_Gates), counts, 0 )
+    fun = lambda t : LikelihoodFunction( Counts_GQT(t,Dim,N_outcomes,N_Gates), counts, Func )
     con = lambda t : Constraints_GSQT( t, Dim, N_outcomes, N_Gates )
         
     results = minimize( fun, t0, constraints = ({'type': 'eq', 'fun': con }), 
@@ -665,7 +665,7 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
 
     results         = Results()   
     results.fun     = [ LikelihoodFunction( Counts_GQT(t,Dim,N_outcomes,N_Gates), counts, k ) for k in range(4) ]
-    results.entropy = [ LikelihoodFunction( counts, counts, 1 ) for k in range(4) ]
+    results.entropy = [ LikelihoodFunction( counts, counts, k ) for k in range(4) ]
 
     #if fun(t0) < fun(t):
     #    t = t0
