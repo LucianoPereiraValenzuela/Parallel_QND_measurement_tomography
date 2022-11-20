@@ -1,2 +1,2 @@
-# Device_QND-Measurement_tomography
+# Parallel QND measurement tomography of multi-qubit quantum devices
  
