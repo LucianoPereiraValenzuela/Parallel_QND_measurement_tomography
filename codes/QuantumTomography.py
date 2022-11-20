@@ -412,11 +412,9 @@ def LinearDetectorTomography(ProveStates, counts, vectorized = False ):
     return Measurements
 
 def ProbabilityOperatorsProjection(Pi):
-
     dim = int(np.sqrt(Pi.shape[0]))
     Num = Pi.shape[1]
     Pi  = np.array( [ PositiveOperatorProjection( Pi[:,k].reshape(dim,dim), 2).flatten() for k in range(Num) ] ).T
-    
     return Pi
     
 def POVM_from_t( t, Dim, Num ):
@@ -468,7 +466,7 @@ def Process2Choi(Process):
 
 def ProcessOperatorProjection(Process):
     Dim = int(np.sqrt(Process.shape[0]))
-    Choi = PositiveOperatorProjection( Process2Choi(Process),1 )
+    Choi = PositiveOperatorProjection( Process2Choi(Process), 2 )
     t0 = PositiveMatrix2CholeskyVector( Choi )
     fun = lambda t : la.norm( CholeskyVector2PositiveMatrix(t,Dim).flatten() - Choi.flatten(),  )
     const = lambda t : la.norm( PartialTrace( CholeskyVector2PositiveMatrix(t,Dim) ,[Dim,Dim], 0) - np.eye(Dim) ).flatten() 
@@ -505,7 +503,7 @@ def MaximumLikelihoodProcessTomography( States, Measurements, counts, Guess = []
     fun = lambda t : LikelihoodFunction( counts_th(t), counts, Func)
     constraints = ({'type': 'eq', 'fun': lambda t:  la.norm( PartialTrace( CholeskyVector2PositiveMatrix( t , Dim ) ,[Dim,Dim], 0) - np.eye(Dim) ) })
     results = minimize( fun, t_guess, bounds = tuple(len(t_guess)*[(-1,1)]), method = 'SLSQP', constraints = constraints)  
-    t = results.x
+    t = results.x 
     result = Results()
     result.measurement = Process2Choi( CholeskyVector2PositiveMatrix ( t, Dim) )
     result.fun         = [ LikelihoodFunction( counts_th(t), counts, k ) for k in range(4) ]
@@ -568,7 +566,7 @@ def MaximumLikelihoodCompleteDetectorTomography( States, Measurements, Probs_ex 
         
         constraints = ({'type': 'eq', 'fun': con })
         results     = minimize( fun, t_guess, constraints = constraints, method = 'SLSQP', 
-                                options={'maxiter': 250, 'ftol': 1e-07} )  
+                                options={'maxiter': 500, 'ftol': 1e-07} )  
         t           = results.x   
         Choiv.append( Process2Choi( CholeskyVector2PositiveMatrix( t ) ) ) 
         # funs.append( fun(t) )
@@ -660,7 +658,7 @@ def MaximumLikelihoodGateSetTomography(counts, rho_tarjet, Pi_tarjet, Gamma_tarj
     con = lambda t : Constraints_GSQT( t, Dim, N_outcomes, N_Gates )
         
     results = minimize( fun, t0, constraints = ({'type': 'eq', 'fun': con }), 
-                        method = 'SLSQP', options={'maxiter': 250, 'ftol': 1e-06}  ) # , bounds = tuple(len(t0)*[(-1,1)])
+                        method = 'SLSQP', options={'maxiter': 500, 'ftol': 1e-07}  ) # , bounds = tuple(len(t0)*[(-1,1)])
     t = results.x
 
     results         = Results()   
