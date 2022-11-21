@@ -867,7 +867,7 @@ class device_process_measurement_tomography :
         results.single = results_single
         results.double = results_double
         results.gateset = results_gst
-        results.parall_qubits = self._parall_qubits
+        results.parall_qubit = self._parall_qubits
 
         return results
                  
